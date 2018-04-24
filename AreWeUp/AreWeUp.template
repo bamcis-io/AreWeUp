@@ -92,12 +92,6 @@
             "AllowedPattern" : "^\\S{2,}$",
             "ConstraintDescription" : "Member must satisfy regular expression pattern: ^\\S{2,}$"
         },
-        "SubApplicationTag"          : {
-            "Description" : "The sub application this account is associated with",
-            "Type"        : "String",
-            "AllowedPattern" : "(?:^$|^\\S{2,}$)",
-            "ConstraintDescription" : "Member must satisfy regular expression pattern: (?:^$|^\\S{2,}$)"
-        },
         "EnvironmentTag"             : {
             "Description" : "The environment this account is associated with",
             "Type"        : "String",
@@ -150,7 +144,8 @@
                     },
                     "Parameters" : [
                         "ConfigBucket",
-                        "ConfigKey"
+                        "ConfigKey",
+						"ForceRefresh"
                     ]
                 },
                 {
@@ -181,7 +176,6 @@
                     "Parameters" : [
                         "OrganizationTag",
                         "ApplicationTag",
-                        "SubApplicationTag",
                         "EnvironmentTag"
                     ]
                 }
@@ -359,7 +353,7 @@
         "AreWeUp"              : {
             "Type" : "AWS::Serverless::Function",
             "Properties" : {
-                "Handler" : "AreWeUp::AreWeUp.Functions::ExecuteHealthChecks",
+                "Handler" : "AreWeUp::BAMCIS.AreWeUp.LambdaEntryPoint::ExecuteHealthChecks",
                 "Runtime" : "dotnetcore1.0",
                 "Description" : "Tests for the availability of paths contained in an S3 object.",
                 "FunctionName" : "AreWeUp",
@@ -451,9 +445,6 @@
                     },
                     "Application" : {
                         "Ref" : "ApplicationTag"
-                    },
-                    "SubApplication" : {
-                        "Ref" : "SubApplicationTag"
                     },
                     "Organization"   : {
                         "Ref" : "OrganizationTag"

@@ -13,8 +13,15 @@ the ability to use the same function to run tests for a multi-tenant environment
 from CloudWatch metrics based on the customer id.
 
 The code base has the ability to perform ICMP and UDP health checks as well, but Ping and UDP are not available
-in the containers used by AWS Lambda and are thus commented out. You can modify the code to include those checks
-and run the application in a Windows or Linux EC2 instance via a scheduled task or cron to perform those checks.
+in the containers used by AWS Lambda. You can modify the code to include those checks and run the application 
+in a Windows or Linux EC2 instance via a scheduled task or cron to perform those checks.
+
+## Known Issue
+
+**This application must use the dotnetcore1.0 runtime.** The dotnetcore2.0 runtime has an issue with using custom
+ssl validation callback handling as described [here](https://github.com/dotnet/corefx/issues/26848). Until that
+is fixed in 2.1 and AWS Lambda updates their Lambda environment to 2.1, this function will only run at version
+1.0.
 
 ## Usage
 

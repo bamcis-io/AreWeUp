@@ -30,128 +30,57 @@ namespace BAMCIS.AreWeUp
     /// </summary>
     public class AreWeUpClient
     {
+        #region Private Fields
+
         /// <summary>
         /// The cookie container all of the handlers will use so they all have access to the same cookies
         /// </summary>
-        private CookieContainer Cookies = new CookieContainer();
+        private CookieContainer _Cookies = new CookieContainer();
 
         /// <summary>
         /// A normal handler that provides a log when SSL errors occur
         /// </summary>
-        private HttpClientHandler NormalHandler;
+        private HttpClientHandler _NormalHandler;
 
         /// <summary>
         /// A handler that provides a log when SSL errors occur and then ignores those errors
         /// </summary>
-        private HttpClientHandler IgnoreSslErrorHandler;
+        private HttpClientHandler _IgnoreSslErrorHandler;
 
         /// <summary>
         /// A handler that provides a log when SSL errors occur, ignores those errors, and does not automatically follow redirects
         /// </summary>
-        private HttpClientHandler IgnoreSslErrorAndNoRedirectHandler;
+        private HttpClientHandler _IgnoreSslErrorAndNoRedirectHandler;
 
         /// <summary>
         /// A handler that provides a log when SSL errors occurs and does not automatically follow redirects
         /// </summary>
-        private HttpClientHandler NoRedirectHandler;
+        private HttpClientHandler _NoRedirectHandler;
 
         /// <summary>
         /// The standard HTTP client using the NormalHandler
         /// </summary>
-        private HttpClient NormalClient;
+        private HttpClient _NormalClient;
 
         /// <summary>
         /// An HTTP client that ignores SSL errors
         /// </summary>
-        private HttpClient IgnoreSslErrorClient;
+        private HttpClient _IgnoreSslErrorClient;
 
         /// <summary>
         /// An HTTP client that ignores SSL errors and does not follow redirects
         /// </summary>
-        private HttpClient IgnoreSslErrorAndNoRedirectClient;
+        private HttpClient _IgnoreSslErrorAndNoRedirectClient;
 
         /// <summary>
         /// An HTTP client that does not follow redirects
         /// </summary>
-        private HttpClient NoRedirectClient;
-
-        /// <summary>
-        /// Initializes all 4 HTTP handlers and clients
-        /// </summary>
-        private void InitializeHttpClients()
-        {
-            this.NormalHandler = new HttpClientHandler()
-            {
-                CookieContainer = Cookies,
-                ServerCertificateCustomValidationCallback = (request, cert, chain, sslPolicyErrors) =>
-                {
-                    //If there is an error with the SSL cert, log it, but let the request continue
-                    if (sslPolicyErrors != SslPolicyErrors.None)
-                    {
-                        this._LambdaContext.LogWarning($"The certificate {JsonConvert.SerializeObject(cert)} could not be validated: {sslPolicyErrors.ToString()}.");
-                    }
-
-                    return sslPolicyErrors == SslPolicyErrors.None;
-                }
-            };
-
-            this.IgnoreSslErrorHandler = new HttpClientHandler()
-            {
-                CookieContainer = Cookies,
-                ServerCertificateCustomValidationCallback = (request, cert, chain, sslPolicyErrors) =>
-                {
-                    //If there is an error with the SSL cert, log it, but let the request continue
-                    if (sslPolicyErrors != SslPolicyErrors.None)
-                    {
-                        this._LambdaContext.LogWarning($"The certificate {JsonConvert.SerializeObject(cert)} could not be validated: {sslPolicyErrors.ToString()}.");
-                    }
-
-                    return true;
-                }
-            };
-
-            this.IgnoreSslErrorAndNoRedirectHandler = new HttpClientHandler()
-            {
-                CookieContainer = Cookies,
-                ServerCertificateCustomValidationCallback = (request, cert, chain, sslPolicyErrors) =>
-                {
-                    //If there is an error with the SSL cert, log it, but let the request continue
-                    if (sslPolicyErrors != SslPolicyErrors.None)
-                    {
-                        this._LambdaContext.LogWarning($"The certificate {JsonConvert.SerializeObject(cert)} could not be validated: {sslPolicyErrors.ToString()}.");
-                    }
-
-                    return true;
-                },
-                AllowAutoRedirect = false
-            };
-
-            this.NoRedirectHandler = new HttpClientHandler()
-            {
-                CookieContainer = Cookies,
-                AllowAutoRedirect = false,
-                ServerCertificateCustomValidationCallback = (request, cert, chain, sslPolicyErrors) =>
-                {
-                    //If there is an error with the SSL cert, log it, but let the request continue
-                    if (sslPolicyErrors != SslPolicyErrors.None)
-                    {
-                        this._LambdaContext.LogWarning($"The certificate {JsonConvert.SerializeObject(cert)} could not be validated: {sslPolicyErrors.ToString()}.");
-                    }
-
-                    return sslPolicyErrors == SslPolicyErrors.None;
-                }
-            };
-
-            this.NormalClient = new HttpClient(NormalHandler);
-            this.IgnoreSslErrorClient = new HttpClient(IgnoreSslErrorHandler);
-            this.IgnoreSslErrorAndNoRedirectClient = new HttpClient(IgnoreSslErrorAndNoRedirectHandler);
-            this.NoRedirectClient = new HttpClient(NoRedirectHandler);
-        }
+        private HttpClient _NoRedirectClient;
 
         /// <summary>
         /// SocketErrors for UDP tests that may indicate success
         /// </summary>
-        private static IReadOnlyCollection<SocketError> OkSocketErrors = new List<SocketError>()
+        private static IReadOnlyCollection<SocketError> _OkSocketErrors = new List<SocketError>()
         {
             SocketError.Success,
             SocketError.TimedOut,
@@ -164,26 +93,37 @@ namespace BAMCIS.AreWeUp
         /// <summary>
         /// SocketErrors for UDP tests that indicate the server is accessible, but the UDP port is not listening
         /// </summary>
-        private static IReadOnlyCollection<SocketError> WarningSocketErrors = new List<SocketError>()
+        private static IReadOnlyCollection<SocketError> _WarningSocketErrors = new List<SocketError>()
         {
             SocketError.ConnectionRefused,
             SocketError.AccessDenied
         };
 
         /// <summary>
+        /// The SNS client config
+        /// </summary>
+        private static AmazonSimpleNotificationServiceConfig SNSConfig = 
+            new AmazonSimpleNotificationServiceConfig();
+
+        /// <summary>
         /// The SNS client used to send SNS messages
         /// </summary>
-        private AmazonSimpleNotificationServiceClient _SNSClient;
+        private static AmazonSimpleNotificationServiceClient _SNSClient = new AmazonSimpleNotificationServiceClient(SNSConfig);
+
+        /// <summary>
+        /// The S3 client configuration
+        /// </summary>
+        private static AmazonS3Config _S3Config = new AmazonS3Config();
 
         /// <summary>
         /// The S3 Client to use to download the URLs
         /// </summary>
-        private IAmazonS3 _S3Client;
+        private static IAmazonS3 _S3Client = new AmazonS3Client(_S3Config);
 
         /// <summary>
         /// The transfer utility to transfer the config file
         /// </summary>
-        private TransferUtility _XFerUtil;
+        private static TransferUtility _XFerUtil = new TransferUtility(_S3Client);
 
         /// <summary>
         /// The Lambda context so all methods can write to the log
@@ -191,14 +131,22 @@ namespace BAMCIS.AreWeUp
         private ILambdaContext _LambdaContext;
 
         /// <summary>
-        /// The client configuration
-        /// </summary>
-        public AreWeUpClientConfig Configuration { get; private set; }
-
-        /// <summary>
         /// The config to use to perform health checks
         /// </summary>
-        private HealthCheckConfiguration HealthCheckConfig;
+        private HealthCheckConfiguration _HealthCheckConfig;
+
+        #endregion
+
+        #region Public Properties
+
+        /// <summary>
+        /// The client configuration
+        /// </summary>
+        public AreWeUpClientConfig Configuration { get; }
+
+        #endregion
+
+        #region Constructors
 
         /// <summary>
         /// Initializes the client with the specified config
@@ -209,33 +157,7 @@ namespace BAMCIS.AreWeUp
             this.Configuration = config;
             this.InitializeHttpClients();
 
-            AmazonS3Config S3Config = new AmazonS3Config();
-            this._S3Client = new AmazonS3Client(S3Config);
-            this._XFerUtil = new TransferUtility(this._S3Client);
-
-            AmazonSimpleNotificationServiceConfig SNSConfig = new AmazonSimpleNotificationServiceConfig();
-            this._SNSClient = new AmazonSimpleNotificationServiceClient(SNSConfig);
-        }
-
-        /// <summary>
-        /// Creates the Client based on the config and reads the health check settings from S3
-        /// </summary>
-        /// <param name="config">The client configuration options</param>
-        /// <returns>A new AreWeUpClient with the specified configuration</returns>
-        public static async Task<AreWeUpClient> CreateClient(AreWeUpClientConfig config)
-        {
-            AreWeUpClient Client = new AreWeUpClient(config);
-            Client.HealthCheckConfig = await Client.ReadConfig();
-            return Client;
-        }
-
-        /// <summary>
-        /// Sets the health check configuration the client will use
-        /// </summary>
-        /// <param name="config">The health check configuration</param>
-        public void SetHealthCheckConfiguration(HealthCheckConfiguration config)
-        {
-            this.HealthCheckConfig = config ?? throw new ArgumentNullException("config", "The health check configuration cannot be null.");
+            ReadConfig(this.Configuration).Wait();
         }
 
         /// <summary>
@@ -248,6 +170,32 @@ namespace BAMCIS.AreWeUp
             this._LambdaContext = context;
         }
 
+        #endregion
+
+        #region Public Methods
+
+        /// <summary>
+        /// Creates the Client based on the config and reads the health check settings from S3
+        /// </summary>
+        /// <param name="config">The client configuration options</param>
+        /// <returns>A new AreWeUpClient with the specified configuration</returns>
+        public static async Task<AreWeUpClient> CreateClient(AreWeUpClientConfig config)
+        {
+            return new AreWeUpClient(config)
+            {
+                _HealthCheckConfig = await ReadConfig(config)
+            };
+        }
+
+        /// <summary>
+        /// Sets the health check configuration the client will use
+        /// </summary>
+        /// <param name="config">The health check configuration</param>
+        public void SetHealthCheckConfiguration(HealthCheckConfiguration config)
+        {
+            this._HealthCheckConfig = config ?? throw new ArgumentNullException("config", "The health check configuration cannot be null.");
+        }
+        
         /// <summary>
         /// Sets the ILambdaContext to use for logging
         /// </summary>
@@ -277,10 +225,10 @@ namespace BAMCIS.AreWeUp
                 if (this.Configuration.ForceRefresh)
                 {
                     this._LambdaContext.LogInfo("Forcing refresh of health check config.");
-                    await this.ReadConfig();
+                    await ReadConfig(this.Configuration);
                 }
 
-                await this.Execute(this.HealthCheckConfig);
+                await this.Execute(this._HealthCheckConfig);
             }
             catch (AggregateException e)
             {
@@ -308,19 +256,29 @@ namespace BAMCIS.AreWeUp
 
                     List<Task> Tasks = new List<Task>();
 
-                    if (request.Http != null)
+                    if (request.Http != null && request.Http.Any())
                     {
                         Tasks.AddRange(request.Http.Select(ExecuteHttpTest));
                     }
 
-                    if (request.Https != null)
+                    if (request.Https != null && request.Https.Any())
                     {
                         Tasks.AddRange(request.Https.Select(ExecuteHttpTest));
                     }
 
-                    if (request.Tcp != null)
+                    if (request.Tcp != null && request.Tcp.Any())
                     {
                         Tasks.AddRange(request.Tcp.Select(ExecuteTcpTest));
+                    }
+
+                    if (request.Udp != null && request.Udp.Any())
+                    {
+                        Tasks.AddRange(request.Udp.Select(ExecuteUdpTest));
+                    }
+
+                    if (request.Icmp != null && request.Icmp.Any())
+                    {
+                        Tasks.AddRange(request.Icmp.Select(ExecuteIcmpTest));
                     }
 
                     await Task.WhenAll(Tasks.ToArray());
@@ -337,6 +295,187 @@ namespace BAMCIS.AreWeUp
             else
             {
                 throw new ArgumentNullException("request", "The health check configuration object cannot be null.");
+            }
+        }
+
+        #endregion
+
+        #region Private Methods
+
+        /// <summary>
+        /// Initializes all 4 HTTP handlers and clients
+        /// </summary>
+        private void InitializeHttpClients()
+        {
+            this._NormalHandler = new HttpClientHandler()
+            {
+                CookieContainer = _Cookies,
+                ServerCertificateCustomValidationCallback = (request, cert, chain, sslPolicyErrors) =>
+                {
+                    //If there is an error with the SSL cert, log it, but let the request continue
+                    if (sslPolicyErrors != SslPolicyErrors.None)
+                    {
+                        this._LambdaContext.LogWarning($"The certificate {JsonConvert.SerializeObject(cert)} could not be validated: {sslPolicyErrors.ToString()}.");
+                    }
+
+                    return sslPolicyErrors == SslPolicyErrors.None;
+                }
+            };
+
+            this._IgnoreSslErrorHandler = new HttpClientHandler()
+            {
+                CookieContainer = _Cookies,
+                ServerCertificateCustomValidationCallback = (request, cert, chain, sslPolicyErrors) =>
+                {
+                    //If there is an error with the SSL cert, log it, but let the request continue
+                    if (sslPolicyErrors != SslPolicyErrors.None)
+                    {
+                        this._LambdaContext.LogWarning($"The certificate {JsonConvert.SerializeObject(cert)} could not be validated: {sslPolicyErrors.ToString()}.");
+                    }
+
+                    return true;
+                }
+            };
+
+            this._IgnoreSslErrorAndNoRedirectHandler = new HttpClientHandler()
+            {
+                CookieContainer = _Cookies,
+                ServerCertificateCustomValidationCallback = (request, cert, chain, sslPolicyErrors) =>
+                {
+                    //If there is an error with the SSL cert, log it, but let the request continue
+                    if (sslPolicyErrors != SslPolicyErrors.None)
+                    {
+                        this._LambdaContext.LogWarning($"The certificate {JsonConvert.SerializeObject(cert)} could not be validated: {sslPolicyErrors.ToString()}.");
+                    }
+
+                    return true;
+                },
+                AllowAutoRedirect = false
+            };
+
+            this._NoRedirectHandler = new HttpClientHandler()
+            {
+                CookieContainer = _Cookies,
+                AllowAutoRedirect = false,
+                ServerCertificateCustomValidationCallback = (request, cert, chain, sslPolicyErrors) =>
+                {
+                    //If there is an error with the SSL cert, log it, but let the request continue
+                    if (sslPolicyErrors != SslPolicyErrors.None)
+                    {
+                        this._LambdaContext.LogWarning($"The certificate {JsonConvert.SerializeObject(cert)} could not be validated: {sslPolicyErrors.ToString()}.");
+                    }
+
+                    return sslPolicyErrors == SslPolicyErrors.None;
+                }
+            };
+
+            this._NormalClient = new HttpClient(_NormalHandler);
+            this._IgnoreSslErrorClient = new HttpClient(_IgnoreSslErrorHandler);
+            this._IgnoreSslErrorAndNoRedirectClient = new HttpClient(_IgnoreSslErrorAndNoRedirectHandler);
+            this._NoRedirectClient = new HttpClient(_NoRedirectHandler);
+        }
+
+        /// <summary>
+        /// Reads the config file from S3
+        /// </summary>
+        /// <returns>The health check request configuration</returns>
+        private static async Task<HealthCheckConfiguration> ReadConfig(AreWeUpClientConfig defaultConfig)
+        {
+            try
+            {
+                //Stream the content of the S3 object
+                using (Stream Result = await _XFerUtil.OpenStreamAsync(new TransferUtilityOpenStreamRequest() { BucketName = defaultConfig.S3Bucket, Key = defaultConfig.S3Key }))
+                {
+                    //Read the stream
+                    using (StreamReader Reader = new StreamReader(Result))
+                    {
+                        JObject JO = JObject.Parse(await Reader.ReadToEndAsync());
+                        JObject NewConfig = new JObject();
+
+                        // Iterates the keys like Http, Https, Tcp, Udp, Icmp
+                        foreach (KeyValuePair<string, JToken> Item in JO)
+                        {
+                            JArray ItemArray = new JArray();
+
+                            // Iterates each config in that category
+                            foreach (JObject Config in ((JArray)JO[Item.Key]).Children<JObject>())
+                            {
+                                // Add in the default values if they weren't defined.
+                                JToken CId = Config.GetValue("CustomerId", StringComparison.OrdinalIgnoreCase);
+
+                                if (CId == null)
+                                {
+                                    if (!String.IsNullOrEmpty(defaultConfig.DefaultCustomerId))
+                                    {
+                                        Config.Add("CustomerId", defaultConfig.DefaultCustomerId);
+                                    }
+                                }
+
+                                JToken CW = Config.GetValue("SendToCloudWatch", StringComparison.OrdinalIgnoreCase);
+
+                                if (CW == null)
+                                {
+                                    Config.Add("SendToCloudWatch", defaultConfig.DefaultSendToCloudWatch);
+                                }
+
+                                if (Item.Key == "Https")
+                                {
+                                    JToken SSL = Config.GetValue("IgnoreSslErrors", StringComparison.OrdinalIgnoreCase);
+
+                                    if (SSL == null)
+                                    {
+                                        Config.Add("IgnoreSslErrors", defaultConfig.DefaultIgnoreSslErrors);
+                                    }
+                                }
+
+                                JToken Timeout = Config.GetValue("Timeout", StringComparison.OrdinalIgnoreCase);
+
+                                if (Timeout == null)
+                                {
+                                    Config.Add("Timeout", defaultConfig.DefaultTimeout);
+                                }
+
+                                JToken SNS = Config.GetValue("SNSTopicARN", StringComparison.OrdinalIgnoreCase);
+
+                                if (SNS == null)
+                                {
+                                    Config.Add("SNSTopicArn", defaultConfig.SNSTopicArn);
+                                }
+
+                                JToken Subject = Config.GetValue("Subject", StringComparison.OrdinalIgnoreCase);
+
+                                if (Subject == null)
+                                {
+                                    if (!String.IsNullOrEmpty(defaultConfig.DefaultSubject))
+                                    {
+                                        Config.Add("Subject", defaultConfig.DefaultSubject);
+                                    }
+                                }
+
+                                ItemArray.Add(Config);
+                            }
+
+                            NewConfig.Add(Item.Key, ItemArray);
+                        }
+
+                        JsonSerializer Serializer = new JsonSerializer();
+
+                        // Be able to convert the string method value to an HttpMethod class object
+                        Serializer.Converters.Add(new HttpMethodConverter());
+                        Serializer.Converters.Add(new KeyValueConverter());
+
+                        // Be able to set properties that have a private setter
+                        Serializer.ContractResolver = new PrivateSetterResolver();
+
+                        return NewConfig.ToObject<HealthCheckConfiguration>(Serializer);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Error processing the S3 object { defaultConfig.S3Bucket}\\{ defaultConfig.S3Key}:\r\n{JsonConvert.SerializeObject(e)}");
+
+                return null;
             }
         }
 
@@ -468,12 +607,12 @@ namespace BAMCIS.AreWeUp
                     // 10060 - A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond
                     // SocketErrorCode - TimedOut
 
-                    if (OkSocketErrors.Contains(e.SocketErrorCode))
+                    if (_OkSocketErrors.Contains(e.SocketErrorCode))
                     {
                         Success = true;
                         Message = $"[INFO] : {request.Path} via UDP on port {request.Port} had status {e.SocketErrorCode.ToString()}, this is being treated as a success.";
                     }
-                    else if (WarningSocketErrors.Contains(e.SocketErrorCode))
+                    else if (_WarningSocketErrors.Contains(e.SocketErrorCode))
                     {
                         Message = $"[WARNING] : {request.Path} via UDP on port {request.Port} was reachable, but the port could not be connected to. This is being treated as a failure.";
                     }
@@ -545,19 +684,19 @@ namespace BAMCIS.AreWeUp
 
             if (IgnoreSslErrors && StopRedirects)
             {
-                Client = IgnoreSslErrorAndNoRedirectClient;
+                Client = _IgnoreSslErrorAndNoRedirectClient;
             }
             else if (IgnoreSslErrors)
             {
-                Client = IgnoreSslErrorClient;
+                Client = _IgnoreSslErrorClient;
             }
             else if (StopRedirects)
             {
-                Client = NoRedirectClient;
+                Client = _NoRedirectClient;
             }
             else
             {
-                Client = NormalClient;
+                Client = _NormalClient;
             }
 
             bool Success = false;
@@ -623,11 +762,11 @@ namespace BAMCIS.AreWeUp
                         // Use a client now that doesn't prevent redirects
                         if (IgnoreSslErrors)
                         {
-                            Client = IgnoreSslErrorClient;
+                            Client = _IgnoreSslErrorClient;
                         }
                         else
                         {
-                            Client = NormalClient;
+                            Client = _NormalClient;
                         }
 
                         SW.Start();
@@ -655,7 +794,7 @@ namespace BAMCIS.AreWeUp
                     {
                         // All the cookies to validate, except those in the cookie container. If the output is 0 (aka ! Any()), then all of the cookies to
                         // validate were in the container
-                        IEnumerable<string> MissingCookies = webRequest.CookiesToValidate.Except(Cookies.GetCookies(webRequest.GetPath()).Cast<Cookie>().Select(x => x.Name));
+                        IEnumerable<string> MissingCookies = webRequest.CookiesToValidate.Except(_Cookies.GetCookies(webRequest.GetPath()).Cast<Cookie>().Select(x => x.Name));
 
                         if (MissingCookies.Any())
                         {
@@ -750,7 +889,7 @@ namespace BAMCIS.AreWeUp
                         PubRequest.Subject = request.Subject;
                     }
 
-                    PublishResponse Response = await this._SNSClient.PublishAsync(PubRequest);
+                    PublishResponse Response = await _SNSClient.PublishAsync(PubRequest);
                 }
                 catch (AggregateException e)
                 {
@@ -835,115 +974,6 @@ namespace BAMCIS.AreWeUp
             }
         }
 
-        /// <summary>
-        /// Reads the config file from S3
-        /// </summary>
-        /// <returns>The health check request configuration</returns>
-        public async Task<HealthCheckConfiguration> ReadConfig()
-        {
-            try
-            {
-                //Stream the content of the S3 object
-                using (Stream Result = await this._XFerUtil.OpenStreamAsync(new TransferUtilityOpenStreamRequest() { BucketName = this.Configuration.S3Bucket, Key = this.Configuration.S3Key }))
-                {
-                    //Read the stream
-                    using (StreamReader Reader = new StreamReader(Result))
-                    {
-                        JObject JO = JObject.Parse(await Reader.ReadToEndAsync());
-                        JObject NewConfig = new JObject();
-
-                        // Iterates the keys like Http, Https, Tcp, Udp, Icmp
-                        foreach (KeyValuePair<string, JToken> Item in JO)
-                        {
-                            JArray ItemArray = new JArray();
-
-                            // Iterates each config in that category
-                            foreach (JObject Config in ((JArray)JO[Item.Key]).Children<JObject>())
-                            {
-                                // Add in the default values if they weren't defined.
-                                JToken CId = Config.GetValue("CustomerId", StringComparison.OrdinalIgnoreCase);
-
-                                if (CId == null)
-                                {
-                                    if (!String.IsNullOrEmpty(this.Configuration.DefaultCustomerId))
-                                    {
-                                        Config.Add("CustomerId", this.Configuration.DefaultCustomerId);
-                                    }
-                                }
-
-                                JToken CW = Config.GetValue("SendToCloudWatch", StringComparison.OrdinalIgnoreCase);
-
-                                if (CW == null)
-                                {
-                                    Config.Add("SendToCloudWatch", this.Configuration.DefaultSendToCloudWatch);
-                                }
-
-                                if (Item.Key == "Https")
-                                {
-                                    JToken SSL = Config.GetValue("IgnoreSslErrors", StringComparison.OrdinalIgnoreCase);
-
-                                    if (SSL == null)
-                                    {
-                                        Config.Add("IgnoreSslErrors", this.Configuration.DefaultIgnoreSslErrors);
-                                    }
-                                }
-
-                                JToken Timeout = Config.GetValue("Timeout", StringComparison.OrdinalIgnoreCase);
-
-                                if (Timeout == null)
-                                {
-                                    Config.Add("Timeout", this.Configuration.DefaultTimeout);
-                                }
-
-                                JToken SNS = Config.GetValue("SNSTopicARN", StringComparison.OrdinalIgnoreCase);
-
-                                if (SNS == null)
-                                {
-                                    Config.Add("SNSTopicArn", this.Configuration.SNSTopicArn);
-                                }
-
-                                JToken Subject = Config.GetValue("Subject", StringComparison.OrdinalIgnoreCase);
-
-                                if (Subject == null)
-                                {
-                                    if (!String.IsNullOrEmpty(this.Configuration.DefaultSubject))
-                                    {
-                                        Config.Add("Subject", this.Configuration.DefaultSubject);
-                                    }
-                                }
-
-                                ItemArray.Add(Config);
-                            }
-
-                            NewConfig.Add(Item.Key, ItemArray);
-                        }
-
-                        JsonSerializer Serializer = new JsonSerializer();
-
-                        // Be able to convert the string method value to an HttpMethod class object
-                        Serializer.Converters.Add(new HttpMethodConverter());
-                        Serializer.Converters.Add(new KeyValueConverter());
-
-                        // Be able to set properties that have a private setter
-                        Serializer.ContractResolver = new PrivateSetterResolver();
-
-                        return NewConfig.ToObject<HealthCheckConfiguration>(Serializer);
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                if (this._LambdaContext != null)
-                {
-                    this._LambdaContext.LogError($"Error processing the S3 object {this.Configuration.S3Bucket}\\{this.Configuration.S3Key}.", e);
-                }
-                else
-                {
-                    Console.WriteLine($"Error processing the S3 object { this.Configuration.S3Bucket}\\{ this.Configuration.S3Key}:\r\n{JsonConvert.SerializeObject(e)}");
-                }
-
-                return null;
-            }
-        }
+        #endregion
     }
 }

@@ -10,7 +10,7 @@ namespace BAMCIS.AreWeUp.Models
     {
         #region Private Fields
 
-        private UInt32 _ReceiveBufferSize;
+        private UInt32 _ReceiveBufferSize = 512;
 
         #endregion
 
@@ -57,7 +57,7 @@ namespace BAMCIS.AreWeUp.Models
             }
 
             this.Payload = payload;
-            this.ReceiveBufferSize = 512;
+            this.ReceiveBufferSize = _ReceiveBufferSize;
         }
 
         #endregion
