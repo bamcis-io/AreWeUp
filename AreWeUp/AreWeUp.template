@@ -1,0 +1,468 @@
+{
+    "AWSTemplateFormatVersion" : "2010-09-09",
+
+    "Transform"                : "AWS::Serverless-2016-10-31",
+
+    "Description"              : "AreWeUp? A service to test the availability of TCP and HTTP/S endpoints.",
+
+    "Parameters"               : {
+        "ConfigBucket" : {
+            "Description" : "The bucket the config file is located in.",
+            "Type"        : "String",
+            "MaxLength"   : 63,
+            "AllowedPattern" : "^[a-z](?:(?:\\.(?!\\.))|-|[a-zA-Z0-9]){1,61}[a-z]$",
+            "ConstraintDescription" : "Member must satisfy regular expression pattern: ^[a-z](?:(?:\\.(?!\\.))|-|[a-zA-Z0-9]){1,61}[a-z]$"
+        },
+        "ConfigKey"    : {
+            "Description" : "The key of the config file.",
+            "Type"        : "String",
+            "Default"     : "areweup.json"
+        },
+        "NotificationEmail" : {
+            "Description" : "The email address to send failed check notifications to.",
+            "Type"        : "String",
+            "MinLength"   : 5
+        },
+		"Subject" : {
+			"Description" : "The default email subject that will be used to send SNS email notifications. If this is not specified, either the specific subject specified in each health check config is used or the SNS display name is used.",
+			"Type" : "String",
+			"Default" : ""
+		},
+        "SendToCloudWatchMetrics" : {
+            "Description" : "Specify to send the data collection to CloudWatch by default. This can be overridden in the config file.",
+            "Type"        : "String",
+            "Default"     : "false",
+            "AllowedValues" : [
+                "true",
+                "false"
+            ]
+        },
+        "IgnoreSslCertificateErrors" : {
+            "Description" : "Select true to ignore any SSL certificate errors by degault when testing an HTTP endpoint. This can be overridden in the config file.",
+            "Type"        : "String",
+            "AllowedValues" : [
+                "true",
+                "false"
+            ],
+            "Default"       : "false"
+        },
+		"DefaultTimeout" : {
+			"Description" : "The default timeout to use for TCP tests, in milliseconds, from 0 to 2000. If this is set to 0, the application will use its own default.",
+			"Type" : "Number",
+			"MinValue" : 0,
+			"MaxValue" : 2000,
+			"Default" : 0
+		},
+        "Frequency"                  : {
+            "Description" : "The frequency the function will run based on the time unit set.",
+            "Type"        : "Number",
+            "MinValue"    : 1,
+            "MaxValue"    : 60,
+            "Default"     : 1
+        },
+        "TimeUnit"                   : {
+            "Description" : "The unit of time for the frequency.",
+            "Type"        : "String",
+            "AllowedValues" : [
+                "second",
+                "minute",
+                "hour",
+                "day"
+            ],
+            "Default"       : "minute"
+        },
+        "ForceRefresh" : {
+			"Description" : "If this is set to true, the Lambda function will reread the config file from S3 on each execution and will not use cached information.",
+			"Type" : "String",
+			"AllowedValues" : [
+				"true",
+				"false"
+			],
+			"Default" : "false"
+		},
+		"OrganizationTag"            : {
+            "Description" : "The organization this account is associated with",
+            "Type"        : "String",
+            "AllowedPattern" : "^\\S{2,}$",
+            "ConstraintDescription" : "Member must satisfy regular expression pattern: ^\\S{2,}$"
+        },
+        "ApplicationTag"             : {
+            "Description" : "The application this account is associated with",
+            "Type"        : "String",
+            "AllowedPattern" : "^\\S{2,}$",
+            "ConstraintDescription" : "Member must satisfy regular expression pattern: ^\\S{2,}$"
+        },
+        "SubApplicationTag"          : {
+            "Description" : "The sub application this account is associated with",
+            "Type"        : "String",
+            "AllowedPattern" : "(?:^$|^\\S{2,}$)",
+            "ConstraintDescription" : "Member must satisfy regular expression pattern: (?:^$|^\\S{2,}$)"
+        },
+        "EnvironmentTag"             : {
+            "Description" : "The environment this account is associated with",
+            "Type"        : "String",
+            "AllowedPattern" : "^\\S{2,}$",
+            "ConstraintDescription" : "Member must satisfy regular expression pattern: ^\\S{2,}$"
+        }
+    },
+
+    "Conditions"               : {
+        "AddS" : {
+            "Fn::Not" : [
+                {
+                    "Fn::Equals" : [
+                        {
+                            "Ref" : "Frequency"
+                        },
+                        1
+                    ]
+                }
+            ]
+        },
+        "SendToCW" : {
+            "Fn::Equals" : [
+                {
+                    "Ref" : "SendToCloudWatchMetrics"
+                },
+                "true"
+            ]
+        },		
+		"UseCustomSubject" : {
+			"Fn::Not" : [
+				{
+					"Fn::Equals" : [
+						{
+							"Ref" : "Subject"
+						},
+						""
+					]
+				}
+			]
+		}
+    },
+
+    "Metadata"                 : {
+        "AWS::CloudFormation::Interface" : {
+            "ParameterGroups" : [
+                {
+                    "Label" : {
+                        "default" : "Configuration"
+                    },
+                    "Parameters" : [
+                        "ConfigBucket",
+                        "ConfigKey"
+                    ]
+                },
+                {
+                    "Label" : {
+                        "default" : "Notifications"
+                    },
+                    "Parameters" : [
+						"Subject",
+                        "NotificationEmail",
+                        "SendToCloudWatchMetrics"
+                    ]
+                },
+                {
+                    "Label" : {
+                        "default" : "Function Options"
+                    },
+                    "Parameters" : [
+                        "Frequency",
+                        "TimeUnit",
+                        "IgnoreSslCertificateErrors",
+						"DefaultTimeout"
+                    ]
+                },
+                {
+                    "Label" : {
+                        "default" : "Tags"
+                    },
+                    "Parameters" : [
+                        "OrganizationTag",
+                        "ApplicationTag",
+                        "SubApplicationTag",
+                        "EnvironmentTag"
+                    ]
+                }
+            ]
+        }
+    },
+
+    "Resources"                : {
+        "LambdaExecutionRole" : {
+            "Type" : "AWS::IAM::Role",
+            "Properties" : {
+                "RoleName" : "LambdaAreWeUp",
+                "AssumeRolePolicyDocument" : {
+                    "Version" : "2012-10-17",
+                    "Statement" : [
+                        {
+                            "Effect" : "Allow",
+                            "Action" : [
+                                "sts:AssumeRole"
+                            ],
+                            "Principal" : {
+                                "Service" : [
+                                    "lambda.amazonaws.com"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "LambdaS3Policy"      : {
+            "Type" : "AWS::IAM::Policy",
+            "Properties" : {
+                "PolicyName" : "LambdaS3AreWeUpPolicy",
+                "PolicyDocument" : {
+                    "Version" : "2012-10-17",
+                    "Statement" : [
+                        {
+                            "Effect" : "Allow",
+                            "Action" : [
+                                "s3:GetObject"
+                            ],
+                            "Resource" : [
+                                {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "arn:aws:s3:::",
+                                            {
+                                                "Ref" : "ConfigBucket"
+                                            },
+                                            "/",
+                                            {
+                                                "Ref" : "ConfigKey"
+                                            }
+                                        ]
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "Roles"          : [
+                    {
+                        "Ref" : "LambdaExecutionRole"
+                    }
+                ]
+            }
+        },
+        "LambdaCWLPolicy"     : {
+            "Type" : "AWS::IAM::Policy",
+            "Properties" : {
+                "PolicyName" : "LambdaCWLAreWeUpPolicy",
+                "PolicyDocument" : {
+                    "Version" : "2012-10-17",
+                    "Statement" : [
+                        {
+                            "Effect" : "Allow",
+                            "Action" : [
+                                "logs:CreateLogStream",
+                                "logs:CreateLogGroup",
+                                "logs:DescribeLogStreams",
+                                "logs:PutLogEvents",
+                                "logs:DescribeLogGroups"
+                            ],
+                            "Resource" : {
+                                "Fn::Join" : [
+                                    "",
+                                    [
+                                        "arn:aws:logs:*:",
+                                        {
+                                            "Ref" : "AWS::AccountId"
+                                        },
+                                        ":*"
+                                    ]
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Roles"          : [
+                    {
+                        "Ref" : "LambdaExecutionRole"
+                    }
+                ]
+            }
+        },
+        "LambdaCWMetricPolicy" : {
+            "Type" : "AWS::IAM::Policy",
+            "Properties" : {
+                "PolicyName" : "LambdaCWMetricAreWeUpPolicy",
+                "PolicyDocument" : {
+                    "Version" : "2012-10-17",
+                    "Statement" : [
+                        {
+                            "Effect" : "Allow",
+                            "Action" : [
+                                "cloudwatch:PutMetricData"
+                            ],
+                            "Resource" : "*"
+                        }
+                    ]
+                },
+                "Roles"          : [
+                    {
+                        "Ref" : "LambdaExecutionRole"
+                    }
+                ]
+            }
+        },
+        "LambdaSNSPolicy"      : {
+            "Type" : "AWS::IAM::Policy",
+            "Properties" : {
+                "PolicyName" : "LambdaSNSAreWeUpPolicy",
+                "PolicyDocument" : {
+                    "Version" : "2012-10-17",
+                    "Statement" : [
+                        {
+                            "Effect" : "Allow",
+                            "Action" : [
+                                "sns:Publish"
+                            ],
+                            "Resource" : [
+                                {
+                                    "Ref" : "SNSTopic"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "Roles"          : [
+                    {
+                        "Ref" : "LambdaExecutionRole"
+                    }
+                ]
+            }
+        },
+
+        "SNSTopic"             : {
+            "Type" : "AWS::SNS::Topic",
+            "Properties" : {
+                "DisplayName" : "AreWeUp?",
+                "Subscription" : [
+                    {
+                        "Protocol" : "email",
+                        "Endpoint" : {
+                            "Ref" : "NotificationEmail"
+                        }
+                    }
+                ],
+                "TopicName"    : "AreWeUp_Notifications"
+            }
+        },
+
+        "AreWeUp"              : {
+            "Type" : "AWS::Serverless::Function",
+            "Properties" : {
+                "Handler" : "AreWeUp::AreWeUp.Functions::ExecuteHealthChecks",
+                "Runtime" : "dotnetcore1.0",
+                "Description" : "Tests for the availability of paths contained in an S3 object.",
+                "FunctionName" : "AreWeUp",
+                "Environment"  : {
+                    "Variables" : {
+                        "ConfigBucket" : {
+                            "Ref" : "ConfigBucket"
+                        },
+                        "ConfigKey"    : {
+                            "Ref" : "ConfigKey"
+                        },
+                        "SNSTopic"     : {
+                            "Ref" : "SNSTopic"
+                        },
+                        "IgnoreSslCertificateErrors" : {
+                            "Ref" : "IgnoreSslCertificateErrors"
+                        },
+                        "SendToCW"                   : {
+                            "Ref" : "SendToCloudWatchMetrics"
+                        },
+                        "CustomerId"                 : {
+                            "Ref" : "AWS::AccountId"
+                        },
+						"DefaultTimeout" : {
+							"Ref" : "DefaultTimeout"
+						},
+						"ForceRefresh" : {
+							"Ref" : "ForceRefresh"
+						},
+						"Subject" : {
+							"Fn::If" : [
+								"UseCustomSubject",
+								{
+									"Ref" : "Subject"										
+								},
+								{
+									"Ref" : "AWS::NoValue"
+								}
+							]
+						}
+                    }
+                },
+                "CodeUri"      : "",
+                "MemorySize"   : 256,
+                "Timeout"      : 300,
+                "Role"         : {
+                    "Fn::GetAtt" : [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Policies"     : null,
+                "Events"       : {
+                    "ExecuteHealthChecks" : {
+                        "Type" : "Schedule",
+                        "Properties" : {
+                            "Schedule" : {
+                                "Fn::Join" : [
+                                    "",
+                                    [
+                                        "rate(",
+                                        {
+                                            "Ref" : "Frequency"
+                                        },
+                                        " ",
+                                        {
+                                            "Ref" : "TimeUnit"
+                                        },
+                                        {
+                                            "Fn::If" : [
+                                                "AddS",
+                                                "s",
+                                                {
+                                                    "Ref" : "AWS::NoValue"
+                                                }
+                                            ]
+                                        },
+                                        ")"
+                                    ]
+                                ]
+                            }
+                        }
+                    }
+                },
+                "Tags"         : {
+                    "Name" : "AreWeUp",
+                    "Environment" : {
+                        "Ref" : "EnvironmentTag"
+                    },
+                    "Application" : {
+                        "Ref" : "ApplicationTag"
+                    },
+                    "SubApplication" : {
+                        "Ref" : "SubApplicationTag"
+                    },
+                    "Organization"   : {
+                        "Ref" : "OrganizationTag"
+                    }
+                }
+            }
+        }
+    },
+
+    "Outputs"                  : {
+    }
+}
