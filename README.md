@@ -65,47 +65,47 @@ a path defined. Other than the path, all the other properties are optional.
 
 ### HTTP
 
-***path** - The path of the site to check. This can either be a DNS host name, an IP address or a URL.
-***sendToCloudWatch** (optional) - true or false, Sends either a 1 if the site is up or 0 if it is down (or no
+* **path** - The path of the site to check. This can either be a DNS host name, an IP address or a URL.
+* **sendToCloudWatch** (optional) - true or false, Sends either a 1 if the site is up or 0 if it is down (or no
 datapoint on error). If successful, it will also send a latency metric. The default for this value is false.
-***expectedResponse** (optional) - The http response code expected, defaults to 200.
-***method** (optional) - The HTTP method to use like GET, POST, etc. This defaults to HEAD.
-***content** (optiona): The content to send in the body of the request for POST, PATCH, and PUT requests.
-***contentType** (optional) - The type of the content that is being sent, like application/json, required if
+* **expectedResponse** (optional) - The http response code expected, defaults to 200.
+* **method** (optional) - The HTTP method to use like GET, POST, etc. This defaults to HEAD.
+* **content** (optiona): The content to send in the body of the request for POST, PATCH, and PUT requests.
+* **contentType** (optional) - The type of the content that is being sent, like application/json, required if
 content is specified.
-***preventAutoRedirect** (optional) - Stops the processing of a redirect so the 3XX response can be inspected, 
+* **preventAutoRedirect** (optional) - Stops the processing of a redirect so the 3XX response can be inspected, 
 defaults to false.
-***redirectHeadersToValidate** (optional) - Key value pairs of the header name and expected value that will be validated
+* **redirectHeadersToValidate** (optional) - Key value pairs of the header name and expected value that will be validated
 on a redirect response. This requires setting preventAutoRedirect to true.
-***cookiesToValidate** (optional) - Tests for the presence of these cookies after the response
-***port** (optional): The port to test on, this defaults to 80.
-***timeout** (optional) - The amount of time in milliseconds to wait until the test times out. Default is 50.
-***customerId** (optional) - A unique Id to associate with the request, this becomes a dimension in the CloudWatch metric. The
+* **cookiesToValidate** (optional) - Tests for the presence of these cookies after the response
+* **port** (optional): The port to test on, this defaults to 80.
+* **timeout** (optional) - The amount of time in milliseconds to wait until the test times out. Default is 50.
+* **customerId** (optional) - A unique Id to associate with the request, this becomes a dimension in the CloudWatch metric. The
 default is the current AWS account id.
-***snsTopicArn** (optional) - A specifc ARN to send SNS notifications to, this defaults to the ARN provided to
+* **snsTopicArn** (optional) - A specifc ARN to send SNS notifications to, this defaults to the ARN provided to
 the lambda function by the CloudFormation template.
-***subject** (optional) - The email subject line to be used with the SNS notification.
+* **subject** (optional) - The email subject line to be used with the SNS notification.
 
 ### HTTPS
 
 All configuration options for **HTTP** are available for HTTPS. Additionally, the following properties are available:
 
-***ignoreSSLErrors** (optional) - true or false, Setting this to true will ignore SSL cert erros like being
+* **ignoreSSLErrors** (optional) - true or false, Setting this to true will ignore SSL cert erros like being
 expired or being signed by an untrusted CA. The error will be logged in CloudWatch logs. The default is false.
-***port** (optional): The port to test on, this defaults to 443.
+* **port** (optional): The port to test on, this defaults to 443.
 
 ### TCP
 
-***path** - The IPv4 address or DNS host name to check.
-***port** - The port to test on.
-***timeout** (optional) - The amount of time in milliseconds to wait until the test times out. Default is 50.
-***sendToCloudWatch** (optional) - true or false, Sends either a 1 if the site is up or 0 if it is down (or no
+* **path** - The IPv4 address or DNS host name to check.
+* **port** - The port to test on.
+* **timeout** (optional) - The amount of time in milliseconds to wait until the test times out. Default is 50.
+* **sendToCloudWatch** (optional) - true or false, Sends either a 1 if the site is up or 0 if it is down (or no
 datapoint on error). If successful, it will also send a latency metric. The default for this value is false.
-***customerId** (optional) - A unique Id to associate with the request, this becomes a dimension in the CloudWatch metric. The
+* **customerId** (optional) - A unique Id to associate with the request, this becomes a dimension in the CloudWatch metric. The
 default is the current AWS account id.
-***snsTopicArn** (optional) - A specifc ARN to send SNS notifications to, this defaults to the ARN provided to
+* **snsTopicArn** (optional) - A specifc ARN to send SNS notifications to, this defaults to the ARN provided to
 the lambda function by the CloudFormation template.
-***subject** (optional) - The email subject line to be used with the SNS notification.
+* **subject** (optional) - The email subject line to be used with the SNS notification.
 
 ### Use cases
 
