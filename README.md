@@ -38,13 +38,13 @@ Here is an example:
       ],
       "https": [
         {
-          "path": "https://a.site.com/user_login",
+          "path": "https://bamcis.io/user_login",
           "method": "POST",
           "contentType": "application/x-www-form-urlencoded",
           "content": "txtId=user&txtPassword=pass&op%5BsignIn%5D=Sign+In",
           "preventAutoRedirect": true,
             "redirectHeadersToValidate": {
-              "location": "https://a.site.com/mainmenu"
+              "location": "https://bamcis.io/mainmenu"
           },
           "timeout": 500,
           "sendToCloudWatch":  true
@@ -52,7 +52,7 @@ Here is an example:
       ],
       "tcp": [
         {
-          "path": "www.amazon.com",
+          "path": "www.bamcis.io",
           "port": 443,
           "sendToCloudWatch": true
         }

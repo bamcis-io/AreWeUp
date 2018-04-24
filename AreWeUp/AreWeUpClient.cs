@@ -6,7 +6,8 @@ using Amazon.S3.Transfer;
 using Amazon.SimpleNotificationService;
 using Amazon.SimpleNotificationService.Model;
 using BAMCIS.AreWeUp.Models;
-using Common;
+using BAMCIS.AreWeUp.Serde;
+using BAMCIS.AWSLambda.Common;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
@@ -539,7 +540,7 @@ namespace BAMCIS.AreWeUp
         {
             Stopwatch SW = new Stopwatch();
             HttpClient Client;
-            bool IgnoreSslErrors = (webRequest.Protocol == AreWeUp.Model.Protocol.HTTPS && ((HttpsAreWeUpRequest)webRequest).IgnoreSSLErrors);
+            bool IgnoreSslErrors = (webRequest.Protocol == Models.Protocol.HTTPS && ((HttpsAreWeUpRequest)webRequest).IgnoreSSLErrors);
             bool StopRedirects = webRequest.PreventAutoRedirect;
 
             if (IgnoreSslErrors && StopRedirects)
@@ -766,7 +767,7 @@ namespace BAMCIS.AreWeUp
         /// <param name="path">The HTTP or TCP endpoing IP address or host name</param>
         /// <param name="customerId">The customer Id associated with this check</param>
         /// <returns>A task that can be awaited for completion of sending the metrics to CloudWatch</returns>
-        private async Task SendCloudWatchUpDownMetric(int value, Model.Protocol protocol, string path, string customerId)
+        private async Task SendCloudWatchUpDownMetric(int value, Models.Protocol protocol, string path, string customerId)
         {
             using (AmazonCloudWatchClient Client = new AmazonCloudWatchClient())
             {
@@ -804,7 +805,7 @@ namespace BAMCIS.AreWeUp
         /// <param name="path">The HTTP or TCP endpoing IP address or host name</param>
         /// <param name="customerId">The customer Id associated with this check</param>
         /// <returns>A task that can be awaited for completion of the metrics to CloudWatch</returns>
-        private async Task SendCloudWatchLatencyMetric(long latency, Model.Protocol protocol, string path, string customerId)
+        private async Task SendCloudWatchLatencyMetric(long latency, Models.Protocol protocol, string path, string customerId)
         {
             using (AmazonCloudWatchClient Client = new AmazonCloudWatchClient())
             {
