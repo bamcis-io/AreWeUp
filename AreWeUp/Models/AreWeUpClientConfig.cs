@@ -11,9 +11,14 @@ namespace BAMCIS.AreWeUp.Models
         #region Private Fields
 
         /// <summary>
-        /// The default timeout for connections, in milliseconds
+        /// The default timeout for TCP, UDP and ICMP in milliseconds
         /// </summary>
-        private static readonly int _DefaultTimeout = 500;
+        private static readonly int _DefaultTimeout = 100000;
+
+        /// <summary>
+        /// The default timeout for HTTP/S request
+        /// </summary>
+        private static readonly int _DefaultHttpTimeout = 100000;
 
         #endregion
 
@@ -57,10 +62,16 @@ namespace BAMCIS.AreWeUp.Models
         public bool ForceRefresh { get; set; }
 
         /// <summary>
-        /// Sets the default timeout to use for TCP tests. This timeout is ignored
-        /// for HTTP and HTTPS tests.
+        /// Sets the default timeout in milliseconds to use for TCP, UDP, and ICMP tests.
+        /// This defaults to 500ms.
         /// </summary>
         public int DefaultTimeout { get; set; }
+
+        /// <summary>
+        /// The timeout in milliseoncs that HTTP based requests will use. This defaults to 
+        /// 2000ms.
+        /// </summary>
+        public int HttpRequestTimeout { get; set; }
 
         /// <summary>
         /// Sets the default subject line to be used with email notifications.
@@ -96,6 +107,7 @@ namespace BAMCIS.AreWeUp.Models
             this.ForceRefresh = false;
             this.DefaultCustomerId = String.Empty;
             this.DefaultTimeout = _DefaultTimeout;
+            this.HttpRequestTimeout = _DefaultHttpTimeout;
             this.DefaultSubject = String.Empty;
         }
 

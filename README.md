@@ -12,9 +12,13 @@ Lambda function is deployed to. However, it can be overriden in the application 
 the ability to use the same function to run tests for a multi-tenant environment and separate out reports
 from CloudWatch metrics based on the customer id.
 
-The code base has the ability to perform ICMP and UDP health checks as well, but Ping and UDP are not available
-in the containers used by AWS Lambda. You can modify the code to include those checks and run the application 
-in a Windows or Linux EC2 instance via a scheduled task or cron to perform those checks.
+When using the DefaultTimeout and HttpTimeout, it's important to understand that all of the health check
+requests defined in the config file are executed in parallel, so the Lambda function will wait for a maximum
+of the highest timeout value configured before finsihing if an endpoint cannot be contacted even if all of 
+the others have succeeded. These configurations are best used to ensure a specific endpoint responds in a given
+amount of time to be considered healthy, not to limit the lambda function's execution time. The timeouts are not
+cumulative. Make sure to leave enough time to perform DNS resolution for each endpoint, which could take as long
+as 15 seconds.
 
 ## Known Issue
 
@@ -23,10 +27,14 @@ ssl validation callback handling as described [here](https://github.com/dotnet/c
 is fixed in 2.1 and AWS Lambda updates their Lambda environment to 2.1, this function will only run at version
 1.0.
 
+The code base has the ability to perform ICMP and UDP health checks as well, but **ICMP and UDP are not available
+in the containers used by AWS Lambda**. You can include those checks in the config file and run the application 
+in a Windows or Linux EC2 instance via a scheduled task or cron to perform those checks. 
+
 ## Usage
 
 The availability tests themselves are all based on a config file that the application reads from S3. The optional
-values for **sendToCloudWatch**, **snsTopicArn**, **timeout**, **subject**, and **customerId** all default to
+values for **sendToCloudWatch**, **snsTopicArn**, **subject**, and **customerId** all default to
 the values configured in the CloudFormation script, which are provided as environment variables to the Lambda function.
 
 If you use test specific SNS topics, make sure you add those topic ARNs to the IAM Policy, `LambdaSNSAreWeUpPolicy`,
@@ -39,7 +47,6 @@ Here is an example:
         {
           "path": "www.bamcis.io",
           "sendToCloudWatch": true,
-          "timeout": 1000,
           "expectedResponse": 200
         }
       ],
@@ -53,7 +60,6 @@ Here is an example:
             "redirectHeadersToValidate": {
               "location": "https://bamcis.io/mainmenu"
           },
-          "timeout": 500,
           "sendToCloudWatch":  true
         }
       ],
@@ -61,7 +67,8 @@ Here is an example:
         {
           "path": "www.bamcis.io",
           "port": 443,
-          "sendToCloudWatch": true
+          "sendToCloudWatch": true,
+		  "timeout": 1000
         }
       ]
     }
@@ -71,6 +78,8 @@ can be absent or empty arrays if there are no tests for that protocol type. Ever
 a path defined. Other than the path, all the other properties are optional. 
 
 ### HTTP
+All HTTP requests use the default timeout specified as an environment variable in the Lambda function or if
+not provided will default to 100,000ms (100 seconds).
 
 * **path** - The path of the site to check. This can either be a DNS host name, an IP address or a URL.
 * **sendToCloudWatch** (optional) - true or false, Sends either a 1 if the site is up or 0 if it is down (or no
@@ -86,7 +95,7 @@ defaults to false.
 on a redirect response. This requires setting preventAutoRedirect to true.
 * **cookiesToValidate** (optional) - Tests for the presence of these cookies after the response
 * **port** (optional): The port to test on, this defaults to 80.
-* **timeout** (optional) - The amount of time in milliseconds to wait until the test times out. Default is 50.
+* **timeout** (optional) - The amount of time in milliseconds to wait until the test times out. Default is 500.
 * **customerId** (optional) - A unique Id to associate with the request, this becomes a dimension in the CloudWatch metric. The
 default is the current AWS account id.
 * **snsTopicArn** (optional) - A specifc ARN to send SNS notifications to, this defaults to the ARN provided to
@@ -105,7 +114,7 @@ expired or being signed by an untrusted CA. The error will be logged in CloudWat
 
 * **path** - The IPv4 address or DNS host name to check.
 * **port** - The port to test on.
-* **timeout** (optional) - The amount of time in milliseconds to wait until the test times out. Default is 50.
+* **timeout** (optional) - The amount of time in milliseconds to wait until the test times out. Default is 100000.
 * **sendToCloudWatch** (optional) - true or false, Sends either a 1 if the site is up or 0 if it is down (or no
 datapoint on error). If successful, it will also send a latency metric. The default for this value is false.
 * **customerId** (optional) - A unique Id to associate with the request, this becomes a dimension in the CloudWatch metric. The
@@ -113,6 +122,21 @@ default is the current AWS account id.
 * **snsTopicArn** (optional) - A specifc ARN to send SNS notifications to, this defaults to the ARN provided to
 the lambda function by the CloudFormation template.
 * **subject** (optional) - The email subject line to be used with the SNS notification.
+
+### UDP
+
+UDP tests are best effort and are looking for connection resets to determine if the endpoint is alive or if
+the payload is accurate, received bytes from the endpoint.
+
+* **path** - The IPv4 address or DNS host name to check.
+* **payload** (optional) - The payload to send in the UDP packet. This defaults to a single byte, 0x00.
+* **receiveBufferSize** (optional) - The buffer size to use to receive data back. This defaults to 512 bytes.
+* **timeout** (optional) - The amount of time in milliseconds to wait until the test times out. Default is 100000.
+
+### ICMP
+
+* **path** - The IPv4 address or DNS host name to check.
+* **timeout** (optional) - The amount of time in milliseconds to wait until the test times out. Default is 100000.
 
 ### Use cases
 

@@ -3,8 +3,13 @@
     {
       "path": "www.bamcis.io",
       "sendToCloudWatch": true,
-      "timeout": 1000,
       "expectedResponse": 200
+    },
+    {
+      "path": "www.amazon.com",
+      "sendToCloudWatch": true,
+      "expectedResponse": 200,
+      "method": "GET"
     }
   ],
   "https": [
@@ -17,13 +22,17 @@
       "redirectHeadersToValidate": {
         "location": "https://bamcis.io/mainmenu"
       },
-      "timeout": 500,
       "sendToCloudWatch": true
     }
   ],
   "tcp": [
     {
       "path": "www.bamcis.io",
+      "port": 443,
+      "sendToCloudWatch": true
+    },
+    {
+      "path": "www.amazon.com",
       "port": 443,
       "sendToCloudWatch": true
     }

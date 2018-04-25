@@ -53,6 +53,18 @@ namespace BAMCIS.AreWeUp
                 ClientConfig.DefaultSubject = String.Empty;
             }
 
+            // If this can't be parsed, it doesn't exist and the AreWeUpClientConfig
+            // will use its own default value for the http timeout
+            if (Int32.TryParse(Environment.GetEnvironmentVariable("HttpTimeout"), out int HttpTimeout))
+            {
+                // Make sure the user didn't specify 0 to mean
+                // the app should use its own default value
+                if (HttpTimeout > 0)
+                {
+                    ClientConfig.HttpRequestTimeout = HttpTimeout;
+                }
+            }
+
             //If we can't parse the variable, or it's not present, defaults to false
             if (Boolean.TryParse(Environment.GetEnvironmentVariable("IgnoreSslCertificateErrors"), out bool TempBool))
             {
@@ -71,6 +83,8 @@ namespace BAMCIS.AreWeUp
 
             if (Int32.TryParse(Environment.GetEnvironmentVariable("DefaultTimeout"), out int Timeout))
             {
+                // Make sure the user didn't specify 0 to mean
+                // the app should use its own default value
                 if (Timeout > 0)
                 {
                     ClientConfig.DefaultTimeout = Timeout;

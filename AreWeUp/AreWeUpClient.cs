@@ -20,6 +20,7 @@ using System.Net.Http;
 using System.Net.NetworkInformation;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -130,11 +131,6 @@ namespace BAMCIS.AreWeUp
         /// </summary>
         private ILambdaContext _LambdaContext;
 
-        /// <summary>
-        /// The config to use to perform health checks
-        /// </summary>
-        private HealthCheckConfiguration _HealthCheckConfig;
-
         #endregion
 
         #region Public Properties
@@ -143,6 +139,11 @@ namespace BAMCIS.AreWeUp
         /// The client configuration
         /// </summary>
         public AreWeUpClientConfig Configuration { get; }
+
+        /// <summary>
+        /// The config to use to perform health checks
+        /// </summary>
+        public HealthCheckConfiguration HealthChecks { get; private set; }
 
         #endregion
 
@@ -183,7 +184,7 @@ namespace BAMCIS.AreWeUp
         {
             return new AreWeUpClient(config)
             {
-                _HealthCheckConfig = await ReadConfig(config)
+                HealthChecks = await ReadConfig(config)
             };
         }
 
@@ -193,7 +194,7 @@ namespace BAMCIS.AreWeUp
         /// <param name="config">The health check configuration</param>
         public void SetHealthCheckConfiguration(HealthCheckConfiguration config)
         {
-            this._HealthCheckConfig = config ?? throw new ArgumentNullException("config", "The health check configuration cannot be null.");
+            this.HealthChecks = config ?? throw new ArgumentNullException("config", "The health check configuration cannot be null.");
         }
         
         /// <summary>
@@ -202,14 +203,7 @@ namespace BAMCIS.AreWeUp
         /// <param name="context">The ILambdaContext to use for logging</param>
         public void SetLambdaContext(ILambdaContext context)
         {
-            if (context != null)
-            {
-                this._LambdaContext = context;
-            }
-            else
-            {
-                throw new ArgumentNullException("context", "The lambda context cannot be null.");
-            }
+            this._LambdaContext = context ?? throw new ArgumentNullException("context", "The lambda context cannot be null.");
         }
 
         /// <summary>
@@ -228,11 +222,7 @@ namespace BAMCIS.AreWeUp
                     await ReadConfig(this.Configuration);
                 }
 
-                await this.Execute(this._HealthCheckConfig);
-            }
-            catch (AggregateException e)
-            {
-                this._LambdaContext.LogError("Problem executing the health checks.", e);
+                await this.Execute(this.HealthChecks);
             }
             catch (Exception e)
             {
@@ -252,18 +242,18 @@ namespace BAMCIS.AreWeUp
             {
                 try
                 {
-                    this._LambdaContext.LogInfo($"CONFIG:\r\n{JsonConvert.SerializeObject(request, new HttpMethodConverter())}");
+                    this._LambdaContext.LogInfo($"HealthCheckConfiguration:\r\n{JsonConvert.SerializeObject(request, new HttpMethodConverter())}");
 
                     List<Task> Tasks = new List<Task>();
 
                     if (request.Http != null && request.Http.Any())
                     {
-                        Tasks.AddRange(request.Http.Select(ExecuteHttpTest));
+                        Tasks.AddRange(request.Http.Select(ExecuteWebRequest));
                     }
 
                     if (request.Https != null && request.Https.Any())
                     {
-                        Tasks.AddRange(request.Https.Select(ExecuteHttpTest));
+                        Tasks.AddRange(request.Https.Select(ExecuteWebRequest));
                     }
 
                     if (request.Tcp != null && request.Tcp.Any())
@@ -282,10 +272,6 @@ namespace BAMCIS.AreWeUp
                     }
 
                     await Task.WhenAll(Tasks.ToArray());
-                }
-                catch (AggregateException e)
-                {
-                    this._LambdaContext.LogError("Problem executing the health checks.", e);
                 }
                 catch (Exception e)
                 {
@@ -369,10 +355,25 @@ namespace BAMCIS.AreWeUp
                 }
             };
 
-            this._NormalClient = new HttpClient(_NormalHandler);
-            this._IgnoreSslErrorClient = new HttpClient(_IgnoreSslErrorHandler);
-            this._IgnoreSslErrorAndNoRedirectClient = new HttpClient(_IgnoreSslErrorAndNoRedirectHandler);
-            this._NoRedirectClient = new HttpClient(_NoRedirectHandler);
+            this._NormalClient = new HttpClient(_NormalHandler, true)
+            {
+                Timeout = TimeSpan.FromMilliseconds(this.Configuration.HttpRequestTimeout)
+            };
+
+            this._IgnoreSslErrorClient = new HttpClient(_IgnoreSslErrorHandler, true)
+            {
+                Timeout = TimeSpan.FromMilliseconds(this.Configuration.HttpRequestTimeout)
+            };
+
+            this._IgnoreSslErrorAndNoRedirectClient = new HttpClient(_IgnoreSslErrorAndNoRedirectHandler, true)
+            {
+                Timeout = TimeSpan.FromMilliseconds(this.Configuration.HttpRequestTimeout)
+            };
+
+            this._NoRedirectClient = new HttpClient(_NoRedirectHandler, true)
+            {
+                Timeout = TimeSpan.FromMilliseconds(this.Configuration.HttpRequestTimeout)
+            };
         }
 
         /// <summary>
@@ -428,11 +429,23 @@ namespace BAMCIS.AreWeUp
                                     }
                                 }
 
-                                JToken Timeout = Config.GetValue("Timeout", StringComparison.OrdinalIgnoreCase);
-
-                                if (Timeout == null)
+                                if (Item.Key.Equals("Tcp", StringComparison.OrdinalIgnoreCase) ||
+                                    Item.Key.Equals("Udp", StringComparison.OrdinalIgnoreCase) ||
+                                    Item.Key.Equals("Icmp", StringComparison.OrdinalIgnoreCase))
                                 {
-                                    Config.Add("Timeout", defaultConfig.DefaultTimeout);
+
+                                    JToken Timeout = Config.GetValue("Timeout", StringComparison.OrdinalIgnoreCase);
+
+                                    if (Timeout == null)
+                                    {
+                                        Config.Add("Timeout", defaultConfig.DefaultTimeout);
+                                    }
+                                }
+                                else
+                                {
+                                    // Otherwise this is a web request, which will all use the
+                                    // same request timeout value
+                                    Config.Add("Timeout", defaultConfig.HttpRequestTimeout);
                                 }
 
                                 JToken SNS = Config.GetValue("SNSTopicARN", StringComparison.OrdinalIgnoreCase);
@@ -473,7 +486,7 @@ namespace BAMCIS.AreWeUp
             }
             catch (Exception e)
             {
-                Console.WriteLine($"Error processing the S3 object { defaultConfig.S3Bucket}\\{ defaultConfig.S3Key}:\r\n{JsonConvert.SerializeObject(e)}");
+                Console.WriteLine($"Error processing the S3 object { defaultConfig.S3Bucket}\\{ defaultConfig.S3Key}:\r\n{SerializeException(e)}");
 
                 return null;
             }
@@ -530,7 +543,7 @@ namespace BAMCIS.AreWeUp
                 }
                 catch (Exception e)
                 {
-                    Message = $"[ERROR] : {request.Path} via TCP on port {request.Port} failed with an unexpected error:\r\n{JsonConvert.SerializeObject(e)}";
+                    Message = $"[ERROR] : {request.Path} via TCP on port {request.Port} failed with an unexpected error:\r\n{SerializeException(e)}";
                 }
             }
             else
@@ -618,12 +631,12 @@ namespace BAMCIS.AreWeUp
                     }
                     else
                     {
-                        Message = $"[ERROR] : {request.Path} via UDP on port {request.Port} failed with an error:\r\n{JsonConvert.SerializeObject(e)}";
+                        Message = $"[ERROR] : {request.Path} via UDP on port {request.Port} failed with an error:\r\n{SerializeException(e)}";
                     }
                 }
                 catch (Exception e)
                 {
-                    Message = $"[ERROR] : {request.Path} via UDP on port {request.Port} failed with an unexpected error:\r\n{JsonConvert.SerializeObject(e)}";
+                    Message = $"[ERROR] : {request.Path} via UDP on port {request.Port} failed with an unexpected error:\r\n{SerializeException(e)}";
                 }
             }
             else
@@ -649,7 +662,7 @@ namespace BAMCIS.AreWeUp
             {
                 try
                 {
-                    PingReply Reply = await Pinger.SendPingAsync(request.Path, 1000);
+                    PingReply Reply = await Pinger.SendPingAsync(request.Path, request.Timeout);
 
                     if (Reply.Status == IPStatus.Success)
                     {
@@ -663,7 +676,7 @@ namespace BAMCIS.AreWeUp
                 }
                 catch (Exception e)
                 {
-                    Message = $"[ERROR] : {request.Path} via PING failed with an unexpected error:\r\n{JsonConvert.SerializeObject(e)}.";
+                    Message = $"[ERROR] : {request.Path} via PING failed with an unexpected error:\r\n{SerializeException(e)}.";
                 }
             }
 
@@ -675,7 +688,7 @@ namespace BAMCIS.AreWeUp
         /// </summary>
         /// <param name="webRequest">The request parameters for the health check</param>
         /// <returns>A task that can be awaited for completion of the check</returns>
-        private async Task ExecuteHttpTest(WebAreWeUpRequest webRequest)
+        private async Task ExecuteWebRequest(WebAreWeUpRequest webRequest)
         {
             Stopwatch SW = new Stopwatch();
             HttpClient Client;
@@ -708,8 +721,6 @@ namespace BAMCIS.AreWeUp
 
             try
             {
-                SW.Start();
-
                 // The client will automatically follow redirects, unless we specifically disable it in the handler
                 Request = new HttpRequestMessage(webRequest.Method, webRequest.GetPath());
 
@@ -720,6 +731,7 @@ namespace BAMCIS.AreWeUp
                     Request.Content = webRequest.GetContent();
                 }
 
+                SW.Start();
                 Response = await Client.SendAsync(Request);
                 SW.Stop();
 
@@ -769,10 +781,10 @@ namespace BAMCIS.AreWeUp
                             Client = _NormalClient;
                         }
 
-                        SW.Start();
                         // Now follow the redirect to see if the page is up
                         HttpRequestMessage NewRequest = new HttpRequestMessage(HttpMethod.Get, Response.Headers.Location);
 
+                        SW.Start();
                         Response = await Client.SendAsync(NewRequest);
                         SW.Stop();
                     }
@@ -821,12 +833,39 @@ namespace BAMCIS.AreWeUp
                 }
                 else
                 {
-                    Message = $"[ERROR] : {webRequest.GetPath().ToString()} via HTTP {webRequest.Method.Method} failed with an error:\r\n{JsonConvert.SerializeObject(e)}";
+                    string ExContent = String.Empty;
+                    try
+                    {
+                        ExContent = JsonConvert.SerializeObject(e);
+                    }
+                    catch (Exception ex)
+                    {
+                        StringBuilder Buffer = new StringBuilder();
+
+                        Buffer.Append("{")
+                            .Append("\"ClassName\":\"")
+                            .Append(e.GetType().Name)
+                            .Append("\",")
+                            .Append("\"Message\":\"")
+                            .Append(e.Message)
+                            .Append("\",")
+                            .Append("\"InnerException\":\"")
+                            .Append(e.InnerException)
+                            .Append("\",")
+                            .Append("\"StackTraceString\":\"")
+                            .Append(e.StackTrace)
+                            .Append("\"")
+                            .Append("}");
+
+                        ExContent = Buffer.ToString();
+                    }
+
+                    Message = $"[ERROR] : {webRequest.GetPath().ToString()} via HTTP {webRequest.Method.Method} failed with an error:\r\n{SerializeException(e)}";
                 }
             }
             catch (Exception e)
             {
-                Message = $"[ERROR] : {webRequest.GetPath().ToString()} via HTTP {webRequest.Method.Method} failed with an unexpected error:\r\n{JsonConvert.SerializeObject(e)}";
+                Message = $"[ERROR] : {webRequest.GetPath().ToString()} via HTTP {webRequest.Method.Method} failed with an unexpected error:\r\n{SerializeException(e)}";
             }
             finally
             {
@@ -862,6 +901,7 @@ namespace BAMCIS.AreWeUp
             if (request.SendToCloudWatch)
             {
                 string Path = request.Path;
+
                 if (request is WebAreWeUpRequest)
                 {
                     // This removes the scheme from the path since it's indicated by the protocol dimension
@@ -971,6 +1011,36 @@ namespace BAMCIS.AreWeUp
                 {
                     this._LambdaContext.LogError($"The CloudWatch metric publish failed with HTTP Status {(int)Response.HttpStatusCode } {Response.HttpStatusCode} : {JsonConvert.SerializeObject(Response.ResponseMetadata) } ");
                 }
+            }
+        }
+
+        /// <summary>
+        /// Serializes an exception to a JSON string safely
+        /// </summary>
+        /// <param name="ex">The exception to serialize</param>
+        /// <returns>A JSON string</returns>
+        private static string SerializeException(Exception ex)
+        {
+            if (ex == null)
+            {
+                throw new ArgumentNullException("ex");
+            }
+
+            try
+            {
+                return JsonConvert.SerializeObject(ex);
+            }
+            catch (Exception)
+            {
+                return JsonConvert.SerializeObject(
+                    new
+                    {
+                        ClassName = ex.GetType().FullName,
+                        Message = ex.Message,
+                        InnerException = (ex.InnerException == null) ? "" : ex.InnerException.Message,
+                        StackTrackString = ex.StackTrace
+                    }
+                );
             }
         }
 

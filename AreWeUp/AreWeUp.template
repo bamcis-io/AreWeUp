@@ -47,11 +47,18 @@
             "Default"       : "false"
         },
 		"DefaultTimeout" : {
-			"Description" : "The default timeout to use for TCP tests, in milliseconds, from 0 to 2000. If this is set to 0, the application will use its own default.",
+			"Description" : "The default timeout to use for TCP tests, in milliseconds, from 0 to 100000. If this is set to 0, the application will use its own default.",
 			"Type" : "Number",
 			"MinValue" : 0,
-			"MaxValue" : 2000,
+			"MaxValue" : 100000,
 			"Default" : 0
+		},
+		"HttpTimeout" : {
+			"Description" : "The timeout to use for HTTP based tests, in milliseconds, from 0 to 100000. If this is set to 0, the application will use its own default.",
+			"Type" : "Number",
+			"MinValue": 0,
+			"MaxValue": 100000,
+			"Default": 0
 		},
         "Frequency"                  : {
             "Description" : "The frequency the function will run based on the time unit set.",
@@ -79,6 +86,12 @@
 				"false"
 			],
 			"Default" : "false"
+		},
+		"LogRetentionInDays" : {
+			"Type" : "Number",
+			"Description" : "The number of days to retain the CloudWatch Logs for the function. If this is set to 0, it will be infinite retention.",
+			"MinValue" : 0,
+			"Default" : 30
 		},
 		"OrganizationTag"            : {
             "Description" : "The organization this account is associated with",
@@ -132,6 +145,14 @@
 					]
 				}
 			]
+		},
+		"InfiniteRetention" : {
+			"Fn::Equals" : [
+				{
+					"Ref" : "LogRetentionInDays"
+				},
+				0
+			]
 		}
     },
 
@@ -183,8 +204,8 @@
         }
     },
 
-    "Resources"                : {
-        "LambdaExecutionRole" : {
+    "Resources"					: {
+        "LambdaExecutionRole"	: {
             "Type" : "AWS::IAM::Role",
             "Properties" : {
                 "RoleName" : "LambdaAreWeUp",
@@ -206,7 +227,7 @@
                 }
             }
         },
-        "LambdaS3Policy"      : {
+        "LambdaS3Policy"		: {
             "Type" : "AWS::IAM::Policy",
             "Properties" : {
                 "PolicyName" : "LambdaS3AreWeUpPolicy",
@@ -245,7 +266,7 @@
                 ]
             }
         },
-        "LambdaCWLPolicy"     : {
+        "LambdaCWLPolicy"		: {
             "Type" : "AWS::IAM::Policy",
             "Properties" : {
                 "PolicyName" : "LambdaCWLAreWeUpPolicy",
@@ -283,7 +304,7 @@
                 ]
             }
         },
-        "LambdaCWMetricPolicy" : {
+        "LambdaCWMetricPolicy"	: {
             "Type" : "AWS::IAM::Policy",
             "Properties" : {
                 "PolicyName" : "LambdaCWMetricAreWeUpPolicy",
@@ -306,7 +327,7 @@
                 ]
             }
         },
-        "LambdaSNSPolicy"      : {
+        "LambdaSNSPolicy"		: {
             "Type" : "AWS::IAM::Policy",
             "Properties" : {
                 "PolicyName" : "LambdaSNSAreWeUpPolicy",
@@ -334,7 +355,25 @@
             }
         },
 
-        "SNSTopic"             : {
+		"CloudWatchLogGroup"	: {
+			"Type" : "AWS::Logs::LogGroup",
+			"Properties" : {
+				"LogGroupName" : "/aws/lambda/AreWeUp",
+				"RetentionInDays" : {
+					"Fn::If" : [
+						"InfiniteRetention",
+						{
+							"Ref" : "AWS::NoValue"
+						},
+						{
+							"Ref" : "LogRetentionInDays"
+						}
+					]
+				}
+			}
+		},
+
+        "SNSTopic"				: {
             "Type" : "AWS::SNS::Topic",
             "Properties" : {
                 "DisplayName" : "AreWeUp?",
@@ -350,7 +389,7 @@
             }
         },
 
-        "AreWeUp"              : {
+        "AreWeUp"				: {
             "Type" : "AWS::Serverless::Function",
             "Properties" : {
                 "Handler" : "AreWeUp::BAMCIS.AreWeUp.LambdaEntryPoint::ExecuteHealthChecks",
@@ -379,6 +418,9 @@
                         },
 						"DefaultTimeout" : {
 							"Ref" : "DefaultTimeout"
+						},
+						"HttpTimeout" : {
+							"Ref" : "HttpTimeout"
 						},
 						"ForceRefresh" : {
 							"Ref" : "ForceRefresh"

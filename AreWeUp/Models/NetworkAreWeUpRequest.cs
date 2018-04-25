@@ -5,6 +5,15 @@
     /// </summary>
     public abstract class NetworkAreWeUpRequest : AreWeUpRequest
     {
+        #region Protected Fields
+
+        /// <summary>
+        /// The default timeout in milliseconds
+        /// </summary>
+        protected static readonly int _DefaultTimeout = 100000;
+
+        #endregion
+
         #region Public Properties
 
         /// <summary>
@@ -31,7 +40,7 @@
         protected NetworkAreWeUpRequest(int port, Protocol protocol) : base(protocol)
         {
             this.Port = port;
-            this.Timeout = 500;
+            this.Timeout = _DefaultTimeout;
         }
 
         /// <summary>
@@ -43,7 +52,7 @@
         protected NetworkAreWeUpRequest(string path, int port, Protocol protocol) : base(path, protocol)
         {
             this.Port = port;
-            this.Timeout = 500;
+            this.Timeout = _DefaultTimeout;
         }
 
         /// <summary>
@@ -53,7 +62,7 @@
         /// <param name="protocol">The protocol of the health check</param>
         protected NetworkAreWeUpRequest(Protocol protocol) : base(protocol)
         {
-            this.Timeout = 500;
+            this.Timeout = _DefaultTimeout;
         }
 
         #endregion
